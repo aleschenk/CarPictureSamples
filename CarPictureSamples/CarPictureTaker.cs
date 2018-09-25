@@ -54,7 +54,7 @@ namespace CarPictureSamples
             VehicleColor.MetallicBlack,
             //VehicleColor.MetallicBlackSteel,
             //VehicleColor.MetallicSilver,
-            //VehicleColor.MetallicRed,
+            VehicleColor.MetallicRed,
             //VehicleColor.MetallicSunriseOrange,
             //VehicleColor.MetallicOliveGreen,
             //VehicleColor.MetallicMidnightBlue,
@@ -156,16 +156,17 @@ namespace CarPictureSamples
 
             if (e.KeyCode == Keys.O)
             {
-                foreach(int angle in angles)
-                { 
-                    //globalAngle++;
-                    //if (globalAngle > 360)
-                    //{
-                    //    globalAngle = 0;
-                    //}
-                    rotateCamera(angle);
-                    Script.Wait(500);
+                //foreach(int angle in angles)
+                //{ 
+                globalAngle += 45;
+                if (globalAngle >= 360)
+                {
+                    globalAngle = 0;
                 }
+
+                rotateCamera(vehicle.Heading + globalAngle);
+                //Script.Wait(500);
+                //}
             }
 
             if (e.KeyCode == Keys.NumPad1)
@@ -238,6 +239,9 @@ namespace CarPictureSamples
                 if(line.StartsWith("#"))
                     continue;
 
+                if(line.Length <= 0)
+                    continue;
+
                 String[] location = line.Split(';');
                 foreach (VehicleHash vehicleHash in vehicles)
                 {
@@ -246,6 +250,8 @@ namespace CarPictureSamples
                         log($"Create new Scene: Vehicle: {vehicleHash} Color: {vehicoleColor}");
                         createScene(location, vehicleHash, vehicoleColor);
                         createCamera();
+                        // Esperar a que se posicione la camara.
+                        Script.Wait(1000);
                         takePictures();
                         destroyAllNearbyVehicles();
                         destroyCamera();
@@ -271,10 +277,10 @@ namespace CarPictureSamples
                 {
                     g.CopyFromScreen(Point.Empty, Point.Empty, bounds.Size);
                 }
-                //Bitmap bmp_800_600 = new Bitmap(800, 600);
-                //Graphics g_800_600 = Graphics.FromImage(bmp_800_600);
-                //g_800_600.DrawImage(bitmap, 0, 0, 800, 600);
-                //bmp_800_600.Save(@"C:\Users\ale\Desktop\dataset\pictures\" + fileName, ImageFormat.Png);
+                Bitmap bmpLowestResolution = new Bitmap(800, 450);
+                Graphics gLowestResolution = Graphics.FromImage(bmpLowestResolution);
+                gLowestResolution.DrawImage(bitmap, 0, 0, 800, 450);
+                bmpLowestResolution.Save(@"C:\Users\ale\Desktop\dataset\800x450\" + fileName, ImageFormat.Png);
                 bitmap.Save(@"C:\Users\ale\Desktop\dataset\pictures\" + fileName, ImageFormat.Png);
             }
         }
@@ -311,7 +317,8 @@ namespace CarPictureSamples
                     refAngle = 0;
                 }
                 rotateCamera(refAngle);
-
+                // Esperar a que se posicione la camara.
+                Script.Wait(100);
                 String str =
                     $"12:00:00;{World.Weather};{(uint)vehicle.Model.Hash};{vehicle.PrimaryColor};" + 
                     $"{vehicle.Position.X};{vehicle.Position.Y};{vehicle.Position.Z};{angle}";
@@ -357,7 +364,7 @@ namespace CarPictureSamples
             setWeather("ExtraSunny");
             createCar(vehicleHash, vehiclePrimaryColor, vehiclePosition, vehicleRotation);
             // Wait to display the vehicle
-            Script.Wait(500);
+            Script.Wait(1000);
         }
 
         private void setTime(String time)
@@ -392,7 +399,7 @@ namespace CarPictureSamples
             vehicle.PrimaryColor = primaryColor;
             Vector3 min, max;
             vehicle.Model.GetDimensions(out min, out max);
-            radius = (max.DistanceTo(min) / 2) + 1;
+            radius = (max.DistanceTo(min) / 2) + 2;
         }
 
         private void destroyAllNearbyVehicles()
