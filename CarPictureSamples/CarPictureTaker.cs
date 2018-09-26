@@ -19,6 +19,7 @@ namespace CarPictureSamples
 
     public class CarPictureTaker : Script
     {
+        Dictionary<String, String> cache = new Dictionary<string, string>();
 
         VehicleHash[] vehicles = {
             //VehicleHash.Asea,
@@ -27,7 +28,7 @@ namespace CarPictureSamples
             //VehicleHash.Bison,
             VehicleHash.Blista,
             VehicleHash.BobcatXL,
-            //VehicleHash.Cavalcade,
+            VehicleHash.Cavalcade,
             //VehicleHash.FQ2,
             //VehicleHash.Futo,
             //VehicleHash.Granger,
@@ -44,7 +45,7 @@ namespace CarPictureSamples
             //VehicleHash.Taxi,
             //VehicleHash.Tornado,
             //VehicleHash.Burrito,
-            //VehicleHash.Camper,
+            VehicleHash.Camper,
             //VehicleHash.Speedo,
             //VehicleHash.Surfer
         };
@@ -219,11 +220,7 @@ namespace CarPictureSamples
         private void startPictureTaker()
         {
             log("Start process");
-            if (vehicle != null)
-            {
-                destroyAllNearbyVehicles();
-                return;
-            }
+            destroyAllNearbyVehicles();
 
             if(MainCamera != null)
             {
@@ -236,31 +233,71 @@ namespace CarPictureSamples
             displayPlayer(false);
             foreach (String line in lines)
             {
+                // skip commented line
                 if(line.StartsWith("#"))
                     continue;
 
+                // skip empty lines
                 if(line.Length <= 0)
                     continue;
 
                 String[] location = line.Split(';');
+
+                Vector3 vehiclePosition = new Vector3(float.Parse(location[2]), float.Parse(location[3]), float.Parse(location[4]));
+                Vector3 vehicleRotation = new Vector3(float.Parse(location[5]), float.Parse(location[6]), float.Parse(location[7]));
+
+                teleport(vehiclePosition);
+
                 foreach (VehicleHash vehicleHash in vehicles)
                 {
-                    foreach(VehicleColor vehicoleColor in colors)
+                    foreach (VehicleColor vehicleColor in colors)
                     {
-                        log($"Create new Scene: Vehicle: {vehicleHash} Color: {vehicoleColor}");
-                        createScene(location, vehicleHash, vehicoleColor);
+                        //if(canSkipEntireScene(vehicleHash, vehicleColor, vehiclePosition))
+                        //{
+                        //    log($"The entire scene was skip.");
+                        //    continue;
+                        //}
+                        log($"Create new Scene: Vehicle: {vehicleHash} Color: {vehicleColor}");
+                        createScene(vehiclePosition, vehicleRotation, vehicleHash, vehicleColor);
                         createCamera();
                         // Esperar a que se posicione la camara.
                         Script.Wait(1000);
                         takePictures();
-                        destroyAllNearbyVehicles();
                         destroyCamera();
                     }
+                    destroyAllNearbyVehicles();
                 }
             }
             displayRadar(true);
             displayPlayer(true);
             log("End process");
+        }
+
+        // Can skip entire scene only if all picture were taken.
+        bool canSkipEntireScene(VehicleHash vehicleHash, VehicleColor vehiclePrimaryColor, Vector3 position)
+        {
+            int cnt = 0;
+            foreach (float angle in angles)
+            {
+                if (pictureAlreadyExists(vehicleHash, vehiclePrimaryColor, position, angle))
+                {
+                    cnt++;
+                };
+            }
+            return cnt == angles.Length;
+        }
+
+        bool pictureAlreadyExists(VehicleHash vehicleHash, VehicleColor vehiclePrimaryColor, Vector3 position, float angle)
+        {
+            String hash = createPictureHash(vehicleHash, vehiclePrimaryColor, position, angle);
+            return cache.ContainsKey(hash);
+        }
+
+        String createPictureHash(VehicleHash vehicleHash, VehicleColor vehiclePrimaryColor, Vector3 position, float angle)
+        {
+            return Sha1Hash(
+                $"12:00:00;{World.Weather};{vehicleHash};{vehiclePrimaryColor};" +
+                $"{position.X};{position.Y};{position.Z};{angle}");
         }
 
         private void log(String data)
@@ -281,7 +318,7 @@ namespace CarPictureSamples
                 Graphics gLowestResolution = Graphics.FromImage(bmpLowestResolution);
                 gLowestResolution.DrawImage(bitmap, 0, 0, 800, 450);
                 bmpLowestResolution.Save(@"C:\Users\ale\Desktop\dataset\800x450\" + fileName, ImageFormat.Png);
-                bitmap.Save(@"C:\Users\ale\Desktop\dataset\pictures\" + fileName, ImageFormat.Png);
+                //bitmap.Save(@"C:\Users\ale\Desktop\dataset\pictures\" + fileName, ImageFormat.Png);
             }
         }
 
@@ -319,11 +356,16 @@ namespace CarPictureSamples
                 rotateCamera(refAngle);
                 // Esperar a que se posicione la camara.
                 Script.Wait(100);
-                String str =
-                    $"12:00:00;{World.Weather};{(uint)vehicle.Model.Hash};{vehicle.PrimaryColor};" + 
-                    $"{vehicle.Position.X};{vehicle.Position.Y};{vehicle.Position.Z};{angle}";
 
-                String fileName = Sha1Hash(str) + ".png";
+                String hash = createPictureHash(toVehicleHash(vehicle.Model.Hash), vehicle.PrimaryColor, vehicle.Position, angle);
+                if (cache.ContainsKey(hash))
+                {
+                    // Skip the picture. Already exists in the index.
+                    log($"Skip the picture {hash}. Already exists in the index.");
+                    continue;
+                }
+
+                String fileName = $"{hash}.png";
 
                 String data =
                     $"12:00:00;{World.Weather};{(uint)vehicle.Model.Hash};{vehicle.PrimaryColor};" +
@@ -346,23 +388,40 @@ namespace CarPictureSamples
             rotateCamera(0);
         }
 
-        private void createScene(String[] param, VehicleHash vehicleHash, VehicleColor vehiclePrimaryColor)
+        private void teleport(Vector3 vehiclePosition)
+        {
+            Game.Player.Character.Position = vehiclePosition + new Vector3(5, 0, 0);
+            // Wait render scene
+            Script.Wait(2500);
+        }
+
+        private void createScene(Vector3 vehiclePosition, Vector3 vehicleRotation, VehicleHash vehicleHash, VehicleColor vehiclePrimaryColor)
         {
             //String time = param[0];
             //String weather = param[1];
             //VehicleHash vehicleHash = (VehicleHash)Enum.Parse(typeof(VehicleHash), param[2]);
             //VehicleColor vehiclePrimaryColor = (VehicleColor) Enum.Parse(typeof(VehicleColor), param[3]);
-            Vector3 vehiclePosition = new Vector3(float.Parse(param[2]), float.Parse(param[3]), float.Parse(param[4]));
-            Vector3 vehicleRotation = new Vector3(float.Parse(param[5]), float.Parse(param[6]), float.Parse(param[7]));
 
-            Game.Player.Character.Position = vehiclePosition + new Vector3(5,0,0);
-
-            // Wait render scene
-            Script.Wait(2500);
-            destroyAllNearbyVehicles();
             setTime("12:00:00");
             setWeather("ExtraSunny");
+
+            if (vehicle == null)
+            {
+                destroyAllNearbyVehicles();
+                createCar(vehicleHash, vehiclePrimaryColor, vehiclePosition, vehicleRotation);
+                return;
+            }
+
+            if (vehicle.Model.Hash == vehicleHash.GetHashCode())
+            {
+                vehicle.PrimaryColor = vehiclePrimaryColor;
+                return;
+            }
+
+            destroyAllNearbyVehicles();
+
             createCar(vehicleHash, vehiclePrimaryColor, vehiclePosition, vehicleRotation);
+
             // Wait to display the vehicle
             Script.Wait(1000);
         }
@@ -376,6 +435,12 @@ namespace CarPictureSamples
         private void setWeather(String weather)
         {
             World.Weather = (Weather)Enum.Parse(typeof(Weather), weather);
+        }
+
+        VehicleHash toVehicleHash(int value)
+        {
+            VehicleHash vehicleHash = (VehicleHash) Enum.Parse(typeof(VehicleHash), ((uint)value).ToString());
+            return vehicleHash;
         }
 
         private void createCar()
