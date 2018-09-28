@@ -13,6 +13,7 @@ using NativeUI;
 using System.Globalization;
 using System.Drawing.Imaging;
 using System.Security.Cryptography;
+using Configuration;
 
 namespace CarPictureSamples
 {
@@ -67,8 +68,8 @@ namespace CarPictureSamples
         private String[] hours = {"12:00:00"};
 
         public Vehicle vehicle;
-        private Camera mainCamera;
-        public Camera MainCamera { get { return mainCamera; } set { mainCamera = value; } }
+        private GTA.Camera mainCamera;
+        public GTA.Camera MainCamera { get { return mainCamera; } set { mainCamera = value; } }
         public Line3D line;
         public float radius = 4f;
         public float angleFactor = 0.0174532924f;
@@ -148,7 +149,7 @@ namespace CarPictureSamples
             //    new Vector3(vehicle.Position.X, vehicle.Position.Y, vehicle.Position.Z),
             //    new Vector3(vehicle.Position.X + offsetX, vehicle.Position.Y + offsetY, vehicle.Position.Z));
 
-            return new Vector3(offsetX, offsetY, 1);
+            return new Vector3(offsetX, offsetY, 0);
         }
 
         private void onKeyDown(object sender, KeyEventArgs e)
@@ -197,6 +198,11 @@ namespace CarPictureSamples
             if (e.KeyCode == Keys.N)
             {
                 createCar();
+            }
+
+            if(e.KeyCode == Keys.OemPeriod)
+            {
+                UI.ShowSubtitle("A");
             }
         }
 
@@ -638,3 +644,32 @@ namespace CarPictureSamples
 //        this._usePlayerView = value;
 //    }
 //}
+//private void a()
+//{
+//    foreach(String location in locations)
+//    {
+//        foreach (String time in times)
+//        {
+//            foreach (String weather in listOfWeather)
+//            {
+//                foreach (VehicleHash vehicleHash in vehicles)
+//                {
+//                    foreach (VehicleColor vehicleColor in colors)
+//                    {
+//                        foreach(float distance in distances)
+//                        { 
+//                            foreach(float pitch in pitchAngles)
+//                            { 
+//                                foreach (float angle in angles)
+//                                {
+
+//                                }
+//                            }
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//    }
+//}
+
