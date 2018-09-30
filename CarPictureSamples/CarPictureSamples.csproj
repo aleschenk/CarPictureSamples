@@ -59,6 +59,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="CarPictureTaker.cs" />
+    <Compile Include="Utils.cs" />
     <Compile Include="Configuration.cs" />
     <Compile Include="Rectangle3D.cs" />
     <Compile Include="GTAFuncs.cs" />

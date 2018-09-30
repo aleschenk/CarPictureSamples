@@ -5,7 +5,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 
@@ -17,13 +16,13 @@ namespace Configuration
         public DateTimeOffset[] Time { get; set; }
 
         [JsonProperty("weather")]
-        public string[] Weather { get; set; }
+        public GTA.Weather[] Weather { get; set; }
 
-        [JsonProperty("brands")]
-        public string[] Brands { get; set; }
+        [JsonProperty("vehicles")]
+        public GTA.Native.VehicleHash[] Vehicles { get; set; }
 
         [JsonProperty("colors")]
-        public string[] Colors { get; set; }
+        public GTA.VehicleColor[] Colors { get; set; }
 
         [JsonProperty("position")]
         public Position[] Position { get; set; }
@@ -35,13 +34,13 @@ namespace Configuration
     public partial class Camera
     {
         [JsonProperty("pitch")]
-        public long[] Pitch { get; set; }
+        public float[] Pitch { get; set; }
 
         [JsonProperty("rotation")]
-        public long[] Rotation { get; set; }
+        public float[] Rotation { get; set; }
 
         [JsonProperty("distance")]
-        public long[] Distance { get; set; }
+        public float[] Distance { get; set; }
     }
 
     public partial class Position
@@ -63,13 +62,13 @@ namespace Configuration
     public partial class Ation
     {
         [JsonProperty("x")]
-        public double X { get; set; }
+        public float X { get; set; }
 
         [JsonProperty("y")]
-        public double Y { get; set; }
+        public float Y { get; set; }
 
         [JsonProperty("z")]
-        public double Z { get; set; }
+        public float Z { get; set; }
     }
 
     public partial class Scene

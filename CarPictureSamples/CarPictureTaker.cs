@@ -14,6 +14,7 @@ using System.Globalization;
 using System.Drawing.Imaging;
 using System.Security.Cryptography;
 using Configuration;
+using static CarPictureSamples.Utils;
 
 namespace CarPictureSamples
 {
@@ -22,7 +23,7 @@ namespace CarPictureSamples
     {
         Dictionary<String, String> cache = new Dictionary<string, string>();
 
-        VehicleHash[] vehicles = {
+        private readonly VehicleHash[] vehicles = {
             VehicleHash.Asea,
             //VehicleHash.Asterope,
             //VehicleHash.Baller,
@@ -51,7 +52,7 @@ namespace CarPictureSamples
             ////VehicleHash.Surfer
         };
 
-        VehicleColor[] colors =
+        private readonly VehicleColor[] colors =
         {
             VehicleColor.MetallicBlack,
             //VehicleColor.MetallicBlackSteel,
@@ -134,24 +135,6 @@ namespace CarPictureSamples
         {
         }
 
-        private Vector3 rotateVector(float angle)
-        {
-            if(vehicle == null)
-            {
-                return Vector3.Zero;
-            }
-
-            double angleInRadians = DegreeToRadians(angle);
-            offsetX = radius * (float) Math.Cos(angleInRadians);
-            offsetY = radius * (float) Math.Sin(angleInRadians);
-
-            //line = new Line3D(
-            //    new Vector3(vehicle.Position.X, vehicle.Position.Y, vehicle.Position.Z),
-            //    new Vector3(vehicle.Position.X + offsetX, vehicle.Position.Y + offsetY, vehicle.Position.Z));
-
-            return new Vector3(offsetX, offsetY, 0);
-        }
-
         private void onKeyDown(object sender, KeyEventArgs e)
         {
 
@@ -165,39 +148,39 @@ namespace CarPictureSamples
                     globalAngle = 0;
                 }
 
-                rotateCamera(vehicle.Heading + globalAngle);
+                //RotateCamera(vehicle.Heading + globalAngle);
                 //Script.Wait(500);
                 //}
             }
 
             if (e.KeyCode == Keys.NumPad1)
             {
-                createCamera();
+                CreateCamera();
             }
 
             if (e.KeyCode == Keys.OemMinus)
             {
-                startPictureTaker();
+                StartPictureTaker();
             }
 
             if(e.KeyCode == Keys.B)
             {
-                savePosition();
+                SavePosition();
             }
 
             if (e.KeyCode == Keys.NumPad0)
             {
-                destroyCamera();
+                DestroyCamera();
             }
 
             if (e.KeyCode == Keys.L)
             {
-                destroyAllNearbyVehicles();
+                DestroyAllNearbyVehicles();
             }
 
             if (e.KeyCode == Keys.N)
             {
-                createCar();
+                CreateCar();
             }
 
             if(e.KeyCode == Keys.OemPeriod)
@@ -206,7 +189,7 @@ namespace CarPictureSamples
             }
         }
 
-        private void savePosition()
+        private void SavePosition()
         {
             if (vehicle == null)
             {
@@ -222,12 +205,13 @@ namespace CarPictureSamples
             System.IO.File.AppendAllText(@"C:\Users\ale\Desktop\dataset\locations.csv", data);
         }
 
-        private void loadCache()
+        private void LoadCache()
         {
             String[] lines = System.IO.File.ReadAllLines(@"C:\Users\ale\Desktop\dataset\index.csv");
-            foreach(String line in lines)
+            cache.Clear();
+            foreach (String line in lines)
             {
-                String hash = line.Split(';')[19];
+                String hash = line.Split(';')[20];
                 if (cache.ContainsKey(hash))
                 {
                     continue;
@@ -237,99 +221,172 @@ namespace CarPictureSamples
             }
         }
 
-        private void startPictureTaker()
+        private void StartPictureTaker()
         {
-            log("Start process");
-            loadCache();
+            DateTime startProcess = DateTime.Now;
+            Log($"Start process: {startProcess}");
+            LoadCache();
 
-            destroyAllNearbyVehicles();
+            DestroyAllNearbyVehicles();
 
             if(MainCamera != null)
             {
-                destroyCamera();
+                DestroyCamera();
             }
 
-            String[] lines = System.IO.File.ReadAllLines(@"C:\Users\ale\Desktop\dataset\locations.csv");
+            String json = System.IO.File.ReadAllText(@"C:\Users\ale\Desktop\dataset\scenes.json");
+            var scene = Scene.FromJson(json);
 
-            displayRadar(false);
-            displayPlayer(false);
-            foreach (String line in lines)
+            var cartesianProduct = from time in scene.Time
+                                   from weather in scene.Weather
+                                   from position in scene.Position
+                                   from vehicle in scene.Vehicles
+                                   from color in scene.Colors
+                                   from distance in scene.Camera.Distance
+                                   from pitch in scene.Camera.Pitch
+                                   from angle in scene.Camera.Rotation
+                                   select new { time, weather, position, vehicle, color, distance, pitch, angle };
+
+            DisplayRadar(false);
+            DisplayPlayer(false);
+
+            TimeSpan currentTime = World.CurrentDayTime;
+            Weather currentWeather = World.Weather;
+            VehicleHash currentVehicleHash = VehicleHash.Adder;
+            VehicleColor currentColor = VehicleColor.Blue;
+            Vector3 currentVehiclePosition = Vector3.Zero;
+            GTA.Vehicle currentVehicle = vehicle;
+            float currentAngle = 0;
+            float currentDistance = 0;
+            float currentPitch = 0;
+
+            foreach (var Index in cartesianProduct)
             {
-                // skip commented line
-                if(line.StartsWith("#"))
-                    continue;
+                Vector3 vehiclePosition = new Vector3(Index.position.Location.X, Index.position.Location.Y, Index.position.Location.Z);
+                Vector3 vehicleRotation = new Vector3(Index.position.Rotation.X, Index.position.Rotation.Y, Index.position.Rotation.Z);
 
-                // skip empty lines
-                if(line.Length <= 0)
-                    continue;
+                String hash = CreatePictureHash(Index.time.TimeOfDay, Index.weather, Index.vehicle, Index.color,
+                    vehiclePosition, Index.distance, Index.pitch, Index.angle);
 
-                String[] fields = line.Split(';');
-
-                String time = fields[0];
-                Weather weather = tpWeather(fields[1]);
-
-                Vector3 vehiclePosition = new Vector3(float.Parse(fields[2]), float.Parse(fields[3]), float.Parse(fields[4]));
-                Vector3 vehicleRotation = new Vector3(float.Parse(fields[5]), float.Parse(fields[6]), float.Parse(fields[7]));
-
-                teleport(vehiclePosition);
-
-                foreach (VehicleHash vehicleHash in vehicles)
+                if(cache.ContainsKey(hash))
                 {
-                    foreach (VehicleColor vehicleColor in colors)
-                    {
-                        if (canSkipEntireScene(time, weather, vehicleHash, vehicleColor, vehiclePosition))
-                        {
-                            continue;
-                        }
-                        log($"Create new Scene: Vehicle: {vehicleHash} Color: {vehicleColor}");
-                        createScene(time, weather, vehiclePosition, vehicleRotation, vehicleHash, vehicleColor);
-                        createCamera();
-                        // Esperar a que se posicione la camara.
-                        Script.Wait(1000);
-                        takePictures(time, weather, vehicleHash, vehicleColor, vehiclePosition);
-                        destroyCamera();
-                    }
-                    destroyAllNearbyVehicles();
+                    continue;
                 }
-            }
-            displayRadar(true);
-            displayPlayer(true);
-            log("End process");
-        }
 
-        // Can skip entire scene only if all picture were taken.
-        bool canSkipEntireScene(String time, Weather weather, VehicleHash vehicleHash, VehicleColor vehiclePrimaryColor, Vector3 position)
-        {
-            int cnt = 0;
-            foreach (float angle in angles)
-            {
-                if (pictureAlreadyExists(time, weather, vehicleHash, vehiclePrimaryColor, position, angle))
+                if(!Index.position.Enabled)
                 {
-                    cnt++;
-                };
+                    continue;
+                }
+
+                //DateTime startPictureTime = DateTime.Now;
+                // ------------------------
+                //      CREATE SCENE
+                // ------------------------
+                if (currentVehiclePosition != vehiclePosition)
+                {
+                    DestroyCamera();
+                    DestroyAllNearbyVehicles(); // Clean the scene.
+                    CreateCamera();
+                    Teleport(vehiclePosition, new Vector3(4, 0, 0));
+                    currentVehiclePosition = vehiclePosition;
+                    Script.Wait(1000); // Wait to display the vehicle
+                }
+
+                if (currentTime != Index.time.TimeOfDay)
+                {
+                    TimeSpan time = Index.time.TimeOfDay;
+                    currentTime = time;
+                    World.CurrentDayTime = currentTime;
+                }
+
+                if (currentWeather != Index.weather)
+                {
+                    Weather weather = Index.weather;
+                    currentWeather = weather;
+                    World.Weather = currentWeather;
+                }
+
+                // ------------------------
+                //      CREATE OBJECT
+                // ------------------------
+                if (currentVehicleHash != Index.vehicle)
+                {
+                    DestroyAllNearbyVehicles(); // Clean the scene.
+                    Script.Wait(10); // Wait to wipe the car
+                    currentVehicle = CreateCar(Index.vehicle, Index.color, vehiclePosition, vehicleRotation);
+                    vehicle = currentVehicle;
+                    currentVehicleHash = Index.vehicle;
+                }
+
+                if (currentVehicle.Model.Hash == Index.vehicle.GetHashCode())
+                {
+                    currentVehicle.PrimaryColor = Index.color;
+                    currentColor = Index.color;
+                }
+
+                // ------------------------
+                //      SET CAMERA
+                // ------------------------
+                if (currentDistance != Index.distance)
+                {
+                    currentDistance = Index.distance;
+                }
+
+                if (currentPitch != Index.pitch)
+                {
+                    currentPitch = Index.pitch;
+                }
+
+                float refAngle = currentVehicle.Heading + Index.angle;
+                if (refAngle <= 0)
+                {
+                    refAngle = 0;
+                }
+                currentAngle = Index.angle;
+                CameraPosition(currentDistance, currentPitch, refAngle);
+                Script.Wait(250);
+
+                String fileName = $"{hash}.png";
+
+                String data =
+                    $"{currentTime};{currentWeather};{(uint)vehicle.Model.Hash};{currentColor};" +
+                    $"{vehiclePosition.X};{vehiclePosition.Y};{vehiclePosition.Z};" +
+                    $"{vehicleRotation.X};{vehicleRotation.Y};{vehicleRotation.Z};" +
+                    $"{vehicle.ClassType};" +
+                    $"{MainCamera.Position.X};{MainCamera.Position.Y};{MainCamera.Position.Z};" +
+                    $"{MainCamera.Rotation.X};{MainCamera.Rotation.Y};{MainCamera.Rotation.Z};" +
+                    //$"{vehiclePosition.DistanceTo(MainCamera.Position)};" +
+                    $"{currentDistance};{currentPitch};{currentAngle};{hash}" +
+                    $"\n";
+
+                System.IO.File.AppendAllText(@"C:\Users\ale\Desktop\dataset\index.csv", data);
+
+                SavePicture(fileName);
+                //TimeSpan pictureTime = DateTime.Now.Subtract(startPictureTime);
+                //Log($"Picture Took: {pictureTime}");
             }
-            return cnt == angles.Length;
+
+            DisplayRadar(true);
+            DisplayPlayer(true);
+            DestroyCamera();
+            DestroyAllNearbyVehicles();
+            TimeSpan endTime = DateTime.Now.Subtract(startProcess);
+            Log($"End process. Total time: {endTime} ");
+            UI.ShowSubtitle("The process has finish.");
         }
 
-        bool pictureAlreadyExists(String time, Weather weather, VehicleHash vehicleHash, VehicleColor vehiclePrimaryColor, Vector3 position, float angle)
+        private static String CreatePictureHash(TimeSpan time, Weather weather, VehicleHash vehicleHash, VehicleColor vehiclePrimaryColor, 
+            Vector3 position, float distance, float pitch, float angle)
         {
-            String hash = createPictureHash(time, weather, vehicleHash, vehiclePrimaryColor, position, angle);
-            return cache.ContainsKey(hash);
-        }
-
-        String createPictureHash(String time, Weather weather, VehicleHash vehicleHash, VehicleColor vehiclePrimaryColor, Vector3 position, float angle)
-        {
-            return Sha1Hash(
+            return Utils.Sha1Hash(
                 $"{time};{weather};{vehicleHash};{vehiclePrimaryColor};" +
-                $"{position.X};{position.Y};{position.Z};{angle}");
+                $"{position.X};{position.Y};{position.Z};{distance};{pitch};{angle}");
         }
 
-        private void log(String data)
-        {
-            System.IO.File.AppendAllText(@"C:\Users\ale\Desktop\dataset\log.txt", $"{DateTime.Now.ToString()}: " + data + "\r\n");
-        }
+        static int IMAGE_WIDTH  = 299; // 800 - 400 - 299
+        static int IMAGE_HEIGHT = 165; // 450 - 225 - 165
 
-        private void savePicture(String fileName)
+        private void SavePicture(String fileName)
         {
             Rectangle bounds = Screen.GetBounds(Point.Empty);
             using (Bitmap bitmap = new Bitmap(bounds.Width, bounds.Height))
@@ -338,154 +395,35 @@ namespace CarPictureSamples
                 {
                     g.CopyFromScreen(Point.Empty, Point.Empty, bounds.Size);
                 }
-                Bitmap bmpLowestResolution = new Bitmap(800, 450);
+                Bitmap bmpLowestResolution = new Bitmap(IMAGE_WIDTH, IMAGE_HEIGHT);
                 Graphics gLowestResolution = Graphics.FromImage(bmpLowestResolution);
-                gLowestResolution.DrawImage(bitmap, 0, 0, 800, 450);
+                gLowestResolution.DrawImage(bitmap, 0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
                 bmpLowestResolution.Save(@"C:\Users\ale\Desktop\dataset\pictures\" + fileName, ImageFormat.Png);
                 //bitmap.Save(@"C:\Users\ale\Desktop\dataset\pictures\" + fileName, ImageFormat.Png);
             }
         }
 
-        private void displayRadar(bool enabled)
+        private Vehicle CreateCar()
         {
-            Function.Call(Hash.DISPLAY_RADAR, enabled);
+            return CreateCar(VehicleHash.Blista, VehicleColor.MetaillicVDarkBlue, Game.Player.Character.Position + Game.Player.Character.ForwardVector * 3.0f, Game.Player.Character.Rotation);
         }
 
-        private void displayPlayer(bool enabled)
+        private Vehicle CreateCar(VehicleHash hash, VehicleColor primaryColor, Vector3 position, Vector3 rotation)
         {
-            Game.Player.Character.IsInvincible = !enabled;
-            Game.Player.Character.IsVisible = enabled;
-        }
-
-        private void takePictures(String time, Weather weather, VehicleHash vehicleHash, VehicleColor vehiclePrimaryColor, Vector3 position)
-        {
-            if (MainCamera == null)
-            {
-                UI.ShowSubtitle("Can't take picture. The MainCamera doesn't exists.");
-            }
-
-            foreach(int angle in angles)
-            {
-                float refAngle = vehicle.Heading + angle;
-                if (refAngle <= 0)
-                {
-                    refAngle = 0;
-                }
-                rotateCamera(refAngle);
-                // Esperar a que se posicione la camara.
-                Script.Wait(100);
-                // toVehicleHash(vehicle.Model.Hash)
-                String hash = createPictureHash(time, weather, vehicleHash, vehiclePrimaryColor, position, angle);
-                if (cache.ContainsKey(hash))
-                {
-                    // Skip the picture. Already exists in the index.
-                    continue;
-                }
-
-                String fileName = $"{hash}.png";
-
-                String data =
-                    $"12:00:00;{World.Weather};{(uint)vehicle.Model.Hash};{vehicle.PrimaryColor};" +
-                    $"{vehicle.Position.X};{vehicle.Position.Y};{vehicle.Position.Z};" +
-                    $"{vehicle.Rotation.X};{vehicle.Rotation.Y};{vehicle.Rotation.Z};" +
-                    $"{vehicle.ClassType};" +
-                    $"{MainCamera.Position.X};{MainCamera.Position.Y};{MainCamera.Position.Z};" +
-                    $"{MainCamera.Rotation.X};{MainCamera.Rotation.Y};{MainCamera.Rotation.Z};" +
-                    $"{vehicle.Position.DistanceTo(MainCamera.Position)};" +
-                    $"{angle};{hash}" +
-                    $"\n";
-
-                System.IO.File.AppendAllText(@"C:\Users\ale\Desktop\dataset\index.csv", data);
-
-                savePicture(fileName);
-
-                Script.Wait(500);
-            }
-
-            rotateCamera(0);
-        }
-
-        private void teleport(Vector3 vehiclePosition)
-        {
-            Game.Player.Character.Position = vehiclePosition + new Vector3(5, 0, 0);
-            // Wait render scene
-            Script.Wait(2500);
-        }
-
-        private void createScene(String time, Weather weather, Vector3 vehiclePosition, Vector3 vehicleRotation, VehicleHash vehicleHash, VehicleColor vehiclePrimaryColor)
-        {
-            //String time = param[0];
-            //String weather = param[1];
-            //VehicleHash vehicleHash = (VehicleHash)Enum.Parse(typeof(VehicleHash), param[2]);
-            //VehicleColor vehiclePrimaryColor = (VehicleColor) Enum.Parse(typeof(VehicleColor), param[3]);
-
-            setTime(time);
-
-            World.Weather = weather;
-
-            if (vehicle == null)
-            {
-                destroyAllNearbyVehicles();
-                createCar(vehicleHash, vehiclePrimaryColor, vehiclePosition, vehicleRotation);
-                return;
-            }
-
-            if (vehicle.Model.Hash == vehicleHash.GetHashCode())
-            {
-                vehicle.PrimaryColor = vehiclePrimaryColor;
-                return;
-            }
-
-            destroyAllNearbyVehicles();
-
-            createCar(vehicleHash, vehiclePrimaryColor, vehiclePosition, vehicleRotation);
-
-            // Wait to display the vehicle
-            Script.Wait(1000);
-        }
-
-        private void setTime(String time)
-        {
-            DateTime dt = DateTime.ParseExact(time, "HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
-            World.CurrentDayTime = dt.TimeOfDay;
-        }
-
-        VehicleHash toVehicleHash(int value)
-        {
-            VehicleHash vehicleHash = (VehicleHash) Enum.Parse(typeof(VehicleHash), ((uint)value).ToString());
-            return vehicleHash;
-        }
-
-        Weather tpWeather(String weather)
-        {
-            return (Weather)Enum.Parse(typeof(Weather), weather);
-        }
-
-        private void createCar()
-        {
-            createCar(VehicleHash.Blista, VehicleColor.MetaillicVDarkBlue, Game.Player.Character.Position + Game.Player.Character.ForwardVector * 3.0f, Game.Player.Character.Rotation);
-        }
-
-        private void createCar(VehicleHash hash, VehicleColor primaryColor, Vector3 position, Vector3 rotation)
-        {
-            if (vehicle != null)
-            {
-                vehicle.Delete();
-                vehicle = null;
-            }
-            vehicle = World.CreateVehicle(hash, position, 0);
+            Vehicle vehicle = World.CreateVehicle(hash, position, 0);
             if (rotation != null)
             {
                 vehicle.Rotation = rotation;
             }
             vehicle.NumberPlate = "iunigo";
             vehicle.PrimaryColor = primaryColor;
-            Vector3 min, max;
-            vehicle.Model.GetDimensions(out min, out max);
-            radius = (max.DistanceTo(min) / 2) + 2;
+            vehicle.Model.GetDimensions(out Vector3 min, out Vector3 max);
+            radius = max.DistanceTo(min) / 2;
+
+            return vehicle;
         }
 
-        private void destroyAllNearbyVehicles()
+        private void DestroyAllNearbyVehicles()
         {
             if (vehicle != null)
             {
@@ -503,23 +441,36 @@ namespace CarPictureSamples
             }
         }
 
-        public void createCamera()
+        public void CreateCamera()
         {
-            if(vehicle == null)
-            {
-                UI.ShowSubtitle("Unable to create the camera. First you need to create a Car. Press N to create a Car.");
-                return ;
-            }
+            CreateCamera(GameplayCamera.Position, GameplayCamera.Rotation, vehicle);
+        }
 
+        public void CreateCamera(Vector3 position, Vector3 rotation, GTA.Vehicle pointAtEntity)
+        {
             // Destroy the camera if exists.
-            destroyCamera();
-
-            MainCamera = World.CreateCamera(GameplayCamera.Position, GameplayCamera.Rotation, GameplayCamera.FieldOfView);
-            rotateCamera(0);
+            DestroyCamera();
+            MainCamera = World.CreateCamera(position, rotation, GameplayCamera.FieldOfView);
+            if(pointAtEntity != null)
+            {
+                MainCamera.PointAt(pointAtEntity);
+            }
             World.RenderingCamera = MainCamera;
         }
 
-        public void destroyCamera()
+        private void CameraPosition(float distance, float pitch, float angle)
+        {
+            double angleInRadians = DegreeToRadians(angle);
+            float offsetX = (radius + distance) * (float) Math.Cos(angleInRadians);
+            float offsetY = (radius + distance) * (float) Math.Sin(angleInRadians);
+            Vector3 offset = new Vector3(offsetX, offsetY, pitch);
+
+            MainCamera.StopPointing();
+            MainCamera.Position = new Vector3(vehicle.Position.X + offset.X, vehicle.Position.Y + offset.Y, vehicle.Position.Z + offset.Z);
+            MainCamera.PointAt(vehicle);
+        }
+
+        private void DestroyCamera()
         {
             if(MainCamera == null)
             {
@@ -537,139 +488,28 @@ namespace CarPictureSamples
             MainCamera = null;
         }
 
-        private void rotateCamera(float angle)
-        {
-            if (MainCamera == null || vehicle == null)
-            {
-                return;
-            }
-
-            Vector3 offset = rotateVector(angle);
-            MainCamera.StopPointing();
-            MainCamera.Position = new Vector3(vehicle.Position.X + offset.X, vehicle.Position.Y + offset.Y, vehicle.Position.Z + offset.Z);
-            MainCamera.PointAt(vehicle);
-        }
-
-        private double RadianToDegree(float radians)
-        {
-            return radians * (180.0 / Math.PI);
-        }
-
-        private double DegreeToRadians(float degrees)
-        {
-            return (Math.PI / 180) * degrees;
-        }
-
-        private float getAngleBetwee2dVectors(float x1, float y1, float x2, float y2)
-        {
-            return Function.Call<float>(GTA.Native.Hash.GET_ANGLE_BETWEEN_2D_VECTORS, x1, y1, x2, y2);
-        }
-
-        static string Sha1Hash(string input)
-        {
-            var hash = (new SHA1Managed()).ComputeHash(Encoding.UTF8.GetBytes(input));
-            return string.Join("", hash.Select(b => b.ToString("x2")).ToArray());
-        }
-
-        //void toJson()
+        // Can skip entire scene only if all picture were taken.
+        //bool canSkipEntireScene(String time, Weather weather, VehicleHash vehicleHash, VehicleColor vehiclePrimaryColor, Vector3 position)
         //{
-        //    MemoryStream stream = new MemoryStream();
-        //    DataContractJsonSerializer ser = new DataContractJsonSerializer(typeof(Person));
+        //    int cnt = 0;
+        //    foreach (float angle in angles)
+        //    {
+        //        if (pictureAlreadyExists(time, weather, vehicleHash, vehiclePrimaryColor, position, angle))
+        //        {
+        //            cnt++;
+        //        };
+        //    }
+        //    return cnt == angles.Length;
+        //}
+
+        //bool pictureAlreadyExists(String time, Weather weather, VehicleHash vehicleHash, VehicleColor vehiclePrimaryColor, Vector3 position, float angle)
+        //{
+        //    String hash = createPictureHash(time, weather, vehicleHash, vehiclePrimaryColor, position, angle);
+        //    return cache.ContainsKey(hash);
         //}
 
     }
 
-    //private void setNearbyVehicle()
-    //{
-    //    Vehicle[] nearbyVehicles = World.GetNearbyVehicles(Game.Player.Character.Position, 4);
-
-    //    if (nearbyVehicles.Length > 0)
-    //    {
-    //        NearbyVehicle = nearbyVehicles.ElementAt(0);
-    //        NearbyVehicle.Model.GetDimensions(out min, out max);
-    //        vehicleDimensions = NearbyVehicle.Model.GetDimensions();
-    //        radius = max.X - min.X;
-    //        //radius = (vehicleDimensions.X / 2);
-    //        UI.ShowSubtitle("Set Vehicle: " + NearbyVehicle);
-    //    }
-    //}
 
 }
-
-
-// UI.ShowSubtitle("Is Invicible " + Game.Player.Character.IsInvincible);
-//UI.ShowSubtitle("Is Visible" + Game.Player.Character.IsVisible);
-//if (Game.Player.Character.IsVisible)
-//{
-//    Game.Player.Character.IsInvincible = true;
-//    Game.Player.Character.IsVisible = false;
-//} else
-//{
-//    Game.Player.Character.IsInvincible = false;
-//    Game.Player.Character.IsVisible = true;
-//}
-
-
-// Print("DD");
-//vehicle = World.CreateVehicle(VehicleHash.Cheetah2, Game.Player.Character.Position + Game.Player.Character.ForwardVector * 3.0f, Game.Player.Character.Heading + 90);
-//vehicle.CanTiresBurst = false;
-//vehicle.CustomPrimaryColor = Color.FromArgb(38, 38, 38);
-//vehicle.CustomSecondaryColor = Color.DarkOrange;
-//vehicle.PlaceOnGround();
-//vehicle.NumberPlate = "SHVDN";
-
-
-//public bool UsePlayerView
-//{
-//    get
-//    {
-//        return _usePlayerView;
-//    }
-//    set
-//    {
-//        if (value)
-//        {
-//            _startPos = Game.Player.Character.Position;
-//            Game.Player.Character.IsInvincible = true;
-//            Game.Player.Character.IsVisible = false;
-//        }
-//        else
-//        {
-//            if (_startPos != null)
-//                Game.Player.Character.Position = _startPos;
-//            Game.Player.Character.IsInvincible = false;
-//            Game.Player.Character.IsVisible = true;
-//        }
-
-//        this._usePlayerView = value;
-//    }
-//}
-//private void a()
-//{
-//    foreach(String location in locations)
-//    {
-//        foreach (String time in times)
-//        {
-//            foreach (String weather in listOfWeather)
-//            {
-//                foreach (VehicleHash vehicleHash in vehicles)
-//                {
-//                    foreach (VehicleColor vehicleColor in colors)
-//                    {
-//                        foreach(float distance in distances)
-//                        { 
-//                            foreach(float pitch in pitchAngles)
-//                            { 
-//                                foreach (float angle in angles)
-//                                {
-
-//                                }
-//                            }
-//                        }
-//                    }
-//                }
-//            }
-//        }
-//    }
-//}
 
