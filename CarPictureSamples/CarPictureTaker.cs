@@ -329,6 +329,7 @@ namespace CarPictureSamples
                 Graphics gLowestResolution = Graphics.FromImage(bmpLowestResolution);
                 gLowestResolution.DrawImage(bitmap, 0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
                 bmpLowestResolution.Save(@"C:\Users\ale\Desktop\dataset\pictures\" + fileName, ImageFormat.Png);
+                //bitmap.Save(@"C:\Users\ale\Desktop\dataset\pictures\" + fileName, ImageFormat.Png);
             }
         }
 
